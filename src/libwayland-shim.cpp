@@ -10,6 +10,12 @@ extern void (*real_wl_display_set_global_filter)(
     void *data
 );
 
+void set_wrapped_display_filter(
+    wl_display* display,
+    wl_display_global_filter_func_t filter,
+    void *data
+);
+
 bool const keep_ld_preload = getenv("BOUNCER_KEEP_LD_PRELOAD");
 
 static void libwayland_shim_init()
@@ -43,7 +49,7 @@ struct wl_display* wl_display_create() {
     }
     libwayland_shim_init();
     struct wl_display* const display = real_wl_display_create();
-    wl_bouncer_init_for_display(display, nullptr);
+    wl_bouncer_init_for_display(display, nullptr, nullptr, nullptr);
     return display;
 }
 
@@ -52,12 +58,7 @@ void wl_display_set_global_filter(
     wl_display_global_filter_func_t filter,
     void *data
 ) {
-    (void)display;
-    (void)filter;
-    (void)data;
-    std::cerr <<
-        "wlbouncer: compositor called wl_display_set_global_filter(), "
-        "but this is being ignored because wlbouncer has been preloaded." << std::endl;
+    set_wrapped_display_filter(display, filter, data);
 }
 
 }

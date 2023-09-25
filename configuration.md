@@ -56,6 +56,8 @@ Conditions check a property of the connecting client. Each condition has differe
   - `$SELF_USER`: the group name of the real user that's running the Wayland compositor
   - `$SELF_EUSER`: the group name of the effective user that's running the Wayland compositor
 
+The plural of any condition can be used to specify a list of acceptable values. For example, `users: [root, alice]`.
+
 ## Wayland global lists
 To get a list of Wayland globals that are currently exposed, install the `wayland-utils` package and run `wayland-info | grep -Po "(?<=interface: ')\w*"`.
 

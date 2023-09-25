@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string>
 #include <memory>
+#include <vector>
 
 struct wl_client;
 
@@ -20,6 +21,12 @@ public:
 private:
     Policy(Policy const&) = delete;
     auto operator=(Policy const&) = delete;
+
+    struct Directive;
+
+    std::vector<Directive> directives;
+
+    void load();
 };
 
 #endif // WL_BOUNCER_POLICY_H

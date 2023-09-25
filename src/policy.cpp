@@ -84,8 +84,8 @@ public:
     }
 };
 
-Policy::Policy() {
-    load();
+Policy::Policy(const char* config_file) {
+    load(config_file);
 }
 
 Policy::~Policy() {}
@@ -127,7 +127,15 @@ auto Policy::check(Client const& client, std::string const& interface) -> bool {
 
 namespace {
 
-auto find_config_file() -> std::string {
+auto find_config_file(const char* config_file) -> std::string {
+    if (config_file) {
+        if (std::filesystem::is_regular_file(config_file)) {
+            return config_file;
+        } else {
+            throw std::runtime_error{
+                std::string{config_file} + " is not a valid config path"};
+        }
+    }
     auto const path_from_env_raw = getenv("BOUNCER_CONFIG");
     std::string path_from_env{path_from_env_raw ? path_from_env_raw : ""};
     if (path_from_env.size()) {
@@ -247,12 +255,12 @@ void parse_condition(
 }
 }
 
-void Policy::load()
+void Policy::load(const char* config_file)
 {
     directives.clear();
     std::string filename;
     try {
-        filename = find_config_file();
+        filename = find_config_file(config_file);
     } catch (std::exception& e) {
         std::cerr << "wlbouncer: " << e.what() << std::endl;
         return;

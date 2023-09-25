@@ -43,7 +43,7 @@ struct wl_display* wl_display_create() {
     }
     libwayland_shim_init();
     struct wl_display* const display = real_wl_display_create();
-    wl_bouncer_init_for_display(display);
+    wl_bouncer_init_for_display(display, nullptr);
     return display;
 }
 

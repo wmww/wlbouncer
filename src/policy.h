@@ -12,7 +12,7 @@ class Policy {
 public:
     struct Client;
 
-    Policy();
+    Policy(const char* config_file);
     ~Policy();
 
     auto client(wl_client* client) -> std::shared_ptr<Client>;
@@ -26,7 +26,7 @@ private:
 
     std::vector<Directive> directives;
 
-    void load();
+    void load(const char* config_file);
 };
 
 #endif // WL_BOUNCER_POLICY_H

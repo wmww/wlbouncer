@@ -18,6 +18,10 @@ namespace {
 struct ClientCtx;
 
 struct DisplayCtx {
+    DisplayCtx(const char* config_file) :
+        policy{config_file}
+    {}
+
     Policy policy;
     std::unordered_map<wl_client const*, ClientCtx*> clients;
     wl_listener client_construction_listener;
@@ -103,11 +107,11 @@ void handle_display_destroyed(wl_listener* listener, void* data) {
 
 extern "C" {
 
-void wl_bouncer_init_for_display(wl_display* display) {
+void wl_bouncer_init_for_display(wl_display* display, const char* config_file) {
     if (bouncer_debug) {
         std::cerr << "wlbouncer: initializing for display " << display << std::endl;
     }
-    auto display_ctx = new DisplayCtx{};
+    auto display_ctx = new DisplayCtx{config_file};
     display_ctx->client_construction_listener.notify = &handle_client_created;
     wl_display_add_client_created_listener(display, &display_ctx->client_construction_listener);
     // This handles deleting DisplayCtx when display is destoryed

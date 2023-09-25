@@ -11,7 +11,7 @@ void (*real_wl_display_set_global_filter)(
     void *data
 ) = wl_display_set_global_filter;
 
-const bool bouncer_debug = getenv("BOUNCER_DEBUG");
+bool bouncer_debug = getenv("BOUNCER_DEBUG");
 
 namespace {
 
@@ -49,20 +49,17 @@ auto filter_func(wl_client const* client, wl_global const* global, void* data) -
     }
     std::string const interface_name = wl_global_get_interface(global)->name;
     auto value = client_ctx->second->cache.find(interface_name);
-    bool used_cache = true;
     if (value == client_ctx->second->cache.end()) {
         auto const policy_client = client_ctx->second->policy_client.get();
         auto const result = policy_client
             ? display_ctx->policy.check(*policy_client, interface_name)
             : false;
         value = client_ctx->second->cache.insert({interface_name, result}).first;
-        used_cache = false;
-    }
-    if (bouncer_debug) {
-        std::cerr << "wlbouncer: " << interface_name
-            << (value->second ? " enabled" : " disabled")
-            << (used_cache ? " (cached)" : "")
-            << std::endl;
+        if (bouncer_debug) {
+            std::cerr << "wlbouncer: " << interface_name
+                << (value->second ? " enabled" : " disabled")
+                << std::endl;
+        }
     }
     return value->second;
 }
@@ -108,7 +105,7 @@ extern "C" {
 
 void wl_bouncer_init_for_display(wl_display* display) {
     if (bouncer_debug) {
-        std::cerr << "wlbouncer: initialized for display " << display << std::endl;
+        std::cerr << "wlbouncer: initializing for display " << display << std::endl;
     }
     auto display_ctx = new DisplayCtx{};
     display_ctx->client_construction_listener.notify = &handle_client_created;

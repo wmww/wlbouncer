@@ -10,6 +10,8 @@ extern void (*real_wl_display_set_global_filter)(
     void *data
 );
 
+bool const keep_ld_preload = getenv("BOUNCER_KEEP_LD_PRELOAD");
+
 static void libwayland_shim_init()
 {
     if (real_wl_display_create)
@@ -36,10 +38,12 @@ static void libwayland_shim_init()
 extern "C" {
 
 struct wl_display* wl_display_create() {
+    if (!keep_ld_preload) {
+        unsetenv("LD_PRELOAD");
+    }
     libwayland_shim_init();
     struct wl_display* const display = real_wl_display_create();
     wl_bouncer_init_for_display(display);
-    //real_wl_display_set_global_filter(display, wl_bouncer_filter, nullptr);
     return display;
 }
 

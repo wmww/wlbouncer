@@ -1,6 +1,9 @@
 # Configuring wlbouncer
-Configuration is written in yaml and stored in `wlbouncer.yaml` file in one of the following locations:
-- TODO
+wlbouncer is configured with a YAML configuration file. If the `BOUNCER_CONFIG` environment variable is set, it is expected to contain the path of the config file. Otherwise the following paths are searched in order:
+- `/usr/local/etc/wlbouncer.yaml`
+- `/etc/wlbouncer.yaml`
+- `$HOME/.config/wlbouncer.yaml`
+If wlbouncer is being used for security keeping the config file in your home directory may not be desirable.
 
 The config file should contain a version (currently must be `0`) and a `policy` that contains a list of directives. Here's an example demonstrating many of the features:
 ```yaml

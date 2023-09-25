@@ -7,6 +7,7 @@
 #include <set>
 #include <functional>
 #include <optional>
+#include <filesystem>
 
 extern bool bouncer_debug;
 
@@ -126,6 +127,33 @@ auto Policy::check(Client const& client, std::string const& interface) -> bool {
 
 namespace {
 
+auto find_config_file() -> std::string {
+    auto const path_from_env_raw = getenv("BOUNCER_CONFIG");
+    std::string path_from_env{path_from_env_raw ? path_from_env_raw : ""};
+    if (path_from_env.size()) {
+        if (std::filesystem::is_regular_file(path_from_env)) {
+            return path_from_env;
+        } else {
+            throw std::runtime_error{
+                path_from_env + " from BOUNCER_CONFIG environment variable not a valid config path"};
+        }
+    } else {
+        std::vector<std::string> search_paths{
+            "/usr/local/etc/wlbouncer.yaml",
+            "/etc/wlbouncer.yaml",
+        };
+        if (auto const home = getenv("HOME")) {
+            search_paths.push_back(std::string{home} + "/.config/wlbouncer.yaml");
+        }
+        for (auto const& path : search_paths) {
+            if (std::filesystem::is_regular_file(path)) {
+                return path;
+            }
+        }
+        throw std::runtime_error{"could not find configuration file"};
+    }
+}
+
 void parse_protocol_list(
     YAML::Node const& node,
     bool enable,
@@ -222,7 +250,16 @@ void parse_condition(
 void Policy::load()
 {
     directives.clear();
-    auto const filename = "wlbouncer.yaml";
+    std::string filename;
+    try {
+        filename = find_config_file();
+    } catch (std::exception& e) {
+        std::cerr << "wlbouncer: " << e.what() << std::endl;
+        return;
+    }
+    if (bouncer_debug) {
+        std::cerr << "wlbouncer: " << "loading " << filename << std::endl;
+    }
     try {
         YAML::Node root = YAML::LoadFile(filename);
         if (root["version"].as<int>() != 0) {
@@ -266,6 +303,9 @@ void Policy::load()
         }
     } catch (std::exception& e) {
         std::cerr << "wlbouncer: error loading " << filename << ": " << e.what() << std::endl;
+        return;
     }
-    std::cerr << "wlbouncer: " << directives.size() << " policy directives loaded" << std::endl;
+    if (bouncer_debug) {
+        std::cerr << "wlbouncer: " << directives.size() << " policy directives loaded" << std::endl;
+    }
 }

@@ -26,3 +26,5 @@ Control which Wayland protocol extensions are available to which clients on any 
 ## Environment variables
 - TODO
 - BOUNCER_KEEP_LD_PRELOAD
+- BOUNCER_DEBUG
+- BOUNCER_CONFIG

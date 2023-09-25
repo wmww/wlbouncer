@@ -3,6 +3,7 @@ wlbouncer is configured with a YAML configuration file. If the `BOUNCER_CONFIG` 
 - `/usr/local/etc/wlbouncer.yaml`
 - `/etc/wlbouncer.yaml`
 - `$HOME/.config/wlbouncer.yaml`
+
 If wlbouncer is being used for security keeping the config file in your home directory may not be desirable.
 
 The config file should contain a version (currently must be `0`) and a `policy` that contains a list of directives. Here's an example demonstrating many of the features:

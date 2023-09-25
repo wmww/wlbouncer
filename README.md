@@ -29,4 +29,4 @@ Control which Wayland protocol extensions are available to which clients on any 
 ## Environment variables
 - `BOUNCER_CONFIG`: set path to wlbouncer.yaml configuration file (can be overridden by compositor when wlbouncer is not preloaded)
 - `BOUNCER_DEBUG`: if set to any value, wlbouncer will print what it's doing
-- `BOUNCER_KEEP_LD_PRELOAD`: when wlbouncer is preloaded into a Wayland compositor it will clear `LD_PRELOAD` by default (so it's not preloaded into every decedent process of the compositor). Setting this to any value will prevent this behavior
+- `BOUNCER_KEEP_LD_PRELOAD`: when wlbouncer is preloaded into a Wayland compositor it will clear `LD_PRELOAD` by default (so it's not preloaded into every descendant process of the compositor). Setting this to any value will prevent this behavior

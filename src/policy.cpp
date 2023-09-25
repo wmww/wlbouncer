@@ -32,6 +32,24 @@ static const std::set<std::string> default_extensions {
 };
 
 using ConditionList = std::vector<std::function<bool(Policy::Client const&)>>;
+
+auto get_username(uid_t uid) -> std::string {
+    passwd const* const pw = getpwuid(uid);
+    if (!pw) {
+        throw std::runtime_error{"failed to get username of user with uid = " + std::to_string(uid)};
+        return nullptr;
+    }
+    return pw->pw_name;
+}
+
+auto get_groupname(gid_t gid) -> std::string {
+    group const* const g = getgrgid(gid);
+    if (!g) {
+        throw std::runtime_error{"failed to get group name of user with gid = " + std::to_string(gid)};
+        return nullptr;
+    }
+    return g->gr_name;
+}
 }
 
 struct Policy::Client {
@@ -72,27 +90,22 @@ Policy::Policy() {
 Policy::~Policy() {}
 
 auto Policy::client(wl_client* client) -> std::shared_ptr<Client> {
-    pid_t pid;
-    uid_t uid;
-    gid_t gid;
-    wl_client_get_credentials(client, &pid, &uid, &gid);
-    passwd const* const pw = getpwuid(uid);
-    if (!pw) {
-        std::cerr << "wlbouncer: failed to get username of user with uid = " << uid << std::endl;
+    try {
+        pid_t pid;
+        uid_t uid;
+        gid_t gid;
+        wl_client_get_credentials(client, &pid, &uid, &gid);
+        auto const result = std::shared_ptr<Client>(new Client{
+            pid, uid, gid, get_username(uid), get_groupname(gid),
+        });
+        if (bouncer_debug) {
+            std::cerr << "wlbouncer: " << result->pid << " from " << result->username << " connected" << std::endl;
+        }
+        return result;
+    } catch (std::exception const& e) {
+        std::cerr << "wlbouncer: " << e.what() << std::endl;
         return nullptr;
     }
-    group const* const g = getgrgid(gid);
-    if (!g) {
-        std::cerr << "wlbouncer: failed to get group name of user with gid = " << gid << std::endl;
-        return nullptr;
-    }
-    auto const result = std::shared_ptr<Client>(new Client{
-        pid, uid, gid, pw->pw_name, g->gr_name,
-    });
-    if (bouncer_debug) {
-        std::cerr << "wlbouncer: " << result->pid << " from " << result->username << " connected" << std::endl;
-    }
-    return result;
 }
 
 auto Policy::check(Client const& client, std::string const& interface) -> bool {
@@ -155,11 +168,22 @@ void parse_protocol_list(
 }
 
 template<typename T>
+auto t_from_node(YAML::Node const& node, std::map<std::string, T> const& variables) -> T {
+    auto const var = variables.find(node.as<std::string>());
+    if (var == variables.end()) {
+        return node.as<T>();
+    } else {
+        return var->second;
+    }
+}
+
+template<typename T>
 void parse_condition(
     YAML::Node const& node,
     std::string const& name,
+    ConditionList* conditions_out,
     std::function<T(Policy::Client const&)> get_item,
-    ConditionList* conditions_out
+    std::map<std::string, T> const& variables
 ) {
     auto const name_plural = name + "s";
     if (node[name]) {
@@ -167,7 +191,7 @@ void parse_condition(
             throw std::runtime_error{"policy directive should not have both " + name + " and " + name_plural};
         }
         if (node[name].IsScalar()) {
-            T const item = node[name].as<T>();
+            T const item = t_from_node(node[name], variables);
             conditions_out->push_back([=](auto client){
                return item == get_item(client);
             });
@@ -180,7 +204,7 @@ void parse_condition(
             std::set<T> result;
             for (auto const& item : node[name_plural]) {
                 if (item.IsScalar()) {
-                    result.insert(item.as<T>());
+                    result.insert(t_from_node(item, variables));
                 } else {
                     throw std::runtime_error{name_plural + " contains non-string value"};
                 }
@@ -218,11 +242,26 @@ void Policy::load()
                     "policy directive did not contain enable, enable-only, disable or disable-only"};
             }
             ConditionList conditions;
-            parse_condition<pid_t>(node, "pid", [](auto client){ return client.pid; }, &conditions);
-            parse_condition<uid_t>(node, "uid", [](auto client){ return client.uid; }, &conditions);
-            parse_condition<gid_t>(node, "gid", [](auto client){ return client.gid; }, &conditions);
-            parse_condition<std::string>(node, "user", [](auto client){ return client.username; }, &conditions);
-            parse_condition<std::string>(node, "group", [](auto client){ return client.groupname; }, &conditions);
+            parse_condition<pid_t>(node, "pid", &conditions, [](auto client){ return client.pid; }, {
+                {"$SELF_PID", getpid()},
+                {"$PARENT_PID", getppid()},
+            });
+            parse_condition<uid_t>(node, "uid", &conditions, [](auto client){ return client.uid; }, {
+                {"$SELF_UID", getuid()},
+                {"$SELF_EUID", geteuid()},
+            });
+            parse_condition<gid_t>(node, "gid", &conditions, [](auto client){ return client.gid; }, {
+                {"$SELF_GID", getgid()},
+                {"$SELF_EGID", getegid()},
+            });
+            parse_condition<std::string>(node, "user", &conditions, [](auto client){ return client.username; }, {
+                {"$SELF_USER", get_username(getuid())},
+                {"$SELF_EUSER", get_username(geteuid())},
+            });
+            parse_condition<std::string>(node, "group", &conditions, [](auto client){ return client.groupname; }, {
+                {"$SERVER_GROUP", get_groupname(getgid())},
+                {"$SERVER_EGROUP", get_groupname(getegid())},
+            });
             directives.emplace_back(conditions, fallthrough, enable, extensions);
         }
     } catch (std::exception& e) {

@@ -27,31 +27,47 @@ struct DisplayCtx {
     wl_display_global_filter_func_t wrapped_filter = nullptr;
     void* wrapped_filter_data = nullptr;
     std::unordered_map<wl_client const*, ClientCtx*> clients;
-    wl_listener client_construction_listener;
-    wl_listener display_destruction_listener;
 
     static std::mutex display_map_mutex;
     static std::unordered_map<wl_display*, DisplayCtx*> display_map;
+};
+
+struct DisplayWrapper {
+    DisplayCtx* const ctx;
+    wl_listener client_construction_listener;
+    wl_listener display_destruction_listener;
+
+    DisplayWrapper(DisplayCtx* ctx) :
+        ctx{ctx}
+    {}
 };
 
 std::mutex DisplayCtx::display_map_mutex;
 std::unordered_map<wl_display*, DisplayCtx*> DisplayCtx::display_map;
 
 static_assert(
-    std::is_standard_layout<DisplayCtx>::value,
-    "DisplayCtx must be standard layout due to wl_container_of requirements");
+    std::is_standard_layout<DisplayWrapper>::value,
+    "DisplayWrapper must be standard layout due to wl_container_of requirements");
 
 struct ClientCtx {
     std::unordered_map<std::string, bool> cache;
     std::shared_ptr<Policy::Client> policy_client;
     DisplayCtx* display_ctx = nullptr;
     wl_client const* client = nullptr;
+};
+
+struct ClientWrapper {
+    ClientCtx* const ctx;
     wl_listener destroy_listener;
+
+    ClientWrapper(ClientCtx* ctx) :
+        ctx{ctx}
+    {}
 };
 
 static_assert(
-    std::is_standard_layout<ClientCtx>::value,
-    "ClientCtx must be standard layout due to wl_container_of requirements");
+    std::is_standard_layout<ClientWrapper>::value,
+    "ClientWrapper must be standard layout due to wl_container_of requirements");
 
 auto filter_func(wl_client const* client, wl_global const* global, void* data) -> bool {
     auto const display_ctx = reinterpret_cast<DisplayCtx*>(data);
@@ -87,25 +103,28 @@ void handle_client_destroyed(wl_listener* listener, void* data) {
     if (bouncer_debug) {
         std::cerr << "wlbouncer: client " << client << " destroyed" << std::endl;
     }
-    ClientCtx* ctx = wl_container_of(listener, ctx, destroy_listener);
+    ClientWrapper* wrapper = wl_container_of(listener, wrapper, destroy_listener);
+    ClientCtx* ctx = wrapper->ctx;
     ctx->display_ctx->clients.erase(client);
+    delete wrapper;
     delete ctx;
 }
 
 void handle_client_created(wl_listener* listener, void* data) {
-    DisplayCtx* display_ctx;
-    display_ctx = wl_container_of(listener, display_ctx, client_construction_listener);
+    DisplayWrapper* display_wrapper = wl_container_of(listener, display_wrapper, client_construction_listener);
+    DisplayCtx* display_ctx = display_wrapper->ctx;
     auto const client = reinterpret_cast<wl_client*>(data);
     if (bouncer_debug) {
         std::cerr << "wlbouncer: client " << client << " created" << std::endl;
     }
     auto const client_ctx = new ClientCtx{};
+    auto const client_wrapper = new ClientWrapper{client_ctx};
     display_ctx->clients.insert({client, client_ctx});
     client_ctx->display_ctx = display_ctx;
     client_ctx->client = client;
     client_ctx->policy_client = display_ctx->policy.client(client);
-    client_ctx->destroy_listener.notify = &handle_client_destroyed;
-    wl_client_add_destroy_listener(client, &client_ctx->destroy_listener);
+    client_wrapper->destroy_listener.notify = &handle_client_destroyed;
+    wl_client_add_destroy_listener(client, &client_wrapper->destroy_listener);
 }
 
 void handle_display_destroyed(wl_listener* listener, void* data) {
@@ -113,12 +132,13 @@ void handle_display_destroyed(wl_listener* listener, void* data) {
     if (bouncer_debug) {
         std::cerr << "wlbouncer: display " << display << " destroyed" << std::endl;
     }
-    DisplayCtx* display_ctx;
-    display_ctx = wl_container_of(listener, display_ctx, display_destruction_listener);
+    DisplayWrapper* display_wrapper = wl_container_of(listener, display_wrapper, client_construction_listener);
+    DisplayCtx* display_ctx = display_wrapper->ctx;
     {
         std::lock_guard lock{DisplayCtx::display_map_mutex};
         DisplayCtx::display_map.erase(display);
     }
+    delete display_wrapper;
     delete display_ctx;
 }
 }
@@ -154,17 +174,18 @@ void wl_bouncer_init_for_display(
         std::cerr << "wlbouncer: initializing for display " << display << std::endl;
     }
     auto display_ctx = new DisplayCtx{config_file};
+    auto display_wrapper = new DisplayWrapper{display_ctx};
     {
         std::lock_guard lock{DisplayCtx::display_map_mutex};
         DisplayCtx::display_map[display] = display_ctx;
     }
     display_ctx->wrapped_filter = filter;
     display_ctx->wrapped_filter_data = filter_data;
-    display_ctx->client_construction_listener.notify = &handle_client_created;
-    wl_display_add_client_created_listener(display, &display_ctx->client_construction_listener);
+    display_wrapper->client_construction_listener.notify = &handle_client_created;
+    wl_display_add_client_created_listener(display, &display_wrapper->client_construction_listener);
     // This handles deleting DisplayCtx when display is destoryed
-    display_ctx->display_destruction_listener.notify = &handle_display_destroyed;
-    wl_display_add_destroy_listener(display, &display_ctx->display_destruction_listener);
+    display_wrapper->display_destruction_listener.notify = &handle_display_destroyed;
+    wl_display_add_destroy_listener(display, &display_wrapper->display_destruction_listener);
     real_wl_display_set_global_filter(display, filter_func, display_ctx);
 }
 }
